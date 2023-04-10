@@ -56,51 +56,6 @@ class OrthancDBManager(object):
     # -----------------------------------------------------
     # METHODS
     # -----------------------------------------------------
-    def watchAndExportStableStudies(self, outputDir, current=None, ACTION_AFTER_EXPORT=None):
-        """ Poll DB - if study becomes stable then unleash action"""
-        try:
-            while True:
-                r = RestToolbox.DoGet(self.url + '/changes', {
-                        'since' : current,
-                        'limit' : 4   # Retrieve at most 4 changes at once
-                        })
-                for change in r['Changes']:
-                    # We are only interested interested in the arrival of new instances
-                    if change['ChangeType'] == 'StableStudy':
-                        # Call the callback function
-                        path = change['Path']
-                        patient = RestToolbox.DoGet(self.url + path)
-                        pKey = patient['ID']
-                        suffix = '_'+self.guessStudyType(pKey)  
-                        if self.VERBOSE:
-                            print('%s -- Have new stable study for %s (%s)'%(helpers.getDateNow(), pKey, suffix))
-                        fullOutputFolder = self.exportStudyToDirectory(pKey, outputDir, suffix)
-                        if self.VERBOSE:
-                            print('%s -- Exported to: %s'%(helpers.getDateNow(), fullOutputFolder))
-                        if ACTION_AFTER_EXPORT != None:
-                            if self.VERBOSE:
-                                print('%s -- Begin post-stable action '%(helpers.getDateNow()))
-                            runAction = ACTION_AFTER_EXPORT(fullOutputFolder)
-                            res = runAction.run()
-                            if res != 0:
-                                if self.VERBOSE:
-                                    print('%s -- Some error with post-stable action [%s]'%(helpers.getDateNow(), str(runAction)))
-                            else:
-                                if self.VERBOSE:
-                                    print('%s -- post-stable action complete [%s]'%(helpers.getDateNow(), str(runAction)))
-                        if self.VERBOSE:
-                            print('%s -- Stable study processed. Current now: %d (thisPID=%d)'%(helpers.getDateNow(), r['Last'], os.getpid()))
-                        ##
-                current = r['Last']
-                if r['Done']:
-                    #print('Everything has been processed: Waiting...')
-                    time.sleep(60)
-        except KeyboardInterrupt:
-            print(' KeyboardInterrupt received. ')
-            print('%s -- EXIT. Current now: %d'%(helpers.getDateNow(), r['Last']))
-            return 0
-        
-    # -----------------------------------------------------
     def getAllSubjects(self):
         ''' return list of subjects'''
         return RestToolbox.DoGet('%s/patients'%(self.url))
@@ -487,24 +442,6 @@ class OrthancDBManager(object):
             else:
                 raise e
 
-    def guessStudyType(self, studyID=None, examNumber=None):
-        return 'UNKNOWN'
-        # if examNumber != None:
-        #     studyID = self.getStudyIDForExamIDs([examNumber])[0]
-        #
-        # listOfSeriesIDs = self.getListOfSeriesIDForStudy(studyID)
-        # for iSeries in listOfSeriesIDs:
-        #     seriesInfos = self.getSeriesInfosForID(iSeries)
-        #     sd = self.getTag(seriesInfos, 'SeriesDescription').lower()
-        #     if any(s in sd for s in defaultTypeDict['Cardiac']):
-        #         return CARDIAC
-        # for iSeries in listOfSeriesIDs:
-        #     seriesInfos = self.getSeriesInfosForID(iSeries)
-        #     sd = self.getTag(seriesInfos, 'SeriesDescription').lower()
-        #     if any(s in sd for s in defaultTypeDict['Neuro']):
-        #         return NEURO
-        # return OTHER
-            
     def getFirstInstanceForExamSeries(self, examNumber, seriesNumber):
         return self.getInstancesForExamSeries(examNumber, seriesNumber)[0]
     
@@ -515,16 +452,7 @@ class OrthancDBManager(object):
     def _uploadFile(self,path):
         with open(path, "r", newline="", encoding='latin') as f:
             content = f.read()#.decode("UTF-8")
-        # f = open(path, "rb")
-        # content = f.read()
-        # f.close()
         return RestToolbox.DoPost('%s/instances' % (self.url), content)
-        # try:
-        #     return RestToolbox.DoPost('%s/instances'%(self.url), content)
-        # except Exception:
-        #     if self.VERBOSE:
-        #         print('  *** WARNING *** Error [USE PY2 !!!] - skipping file %s'%(path))
-        #         return {'Status':'Error'}
     
     def uploadDirectory(self, dirName, DEBUG=False, IGNORE_JSONS=True):
         # Recursively upload a directory
