@@ -25,7 +25,7 @@ if (sys.version_info >= (3, 0)):
 else:
     from urllib import urlencode  # @Reimport
 
-from . import helpers
+import helpers
 
 _credentials = (helpers.ORTHANC_USERNAME,helpers.ORTHANC_PASSWORD)
 

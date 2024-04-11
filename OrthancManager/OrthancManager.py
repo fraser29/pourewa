@@ -32,7 +32,8 @@ import OrthancRestToolbox as RestToolbox
 from datetime import datetime
 import time
 import json
-from . import helpers
+import helpers
+
 
 # ==========================================================
 class OrthancDBManager(object):
