@@ -34,7 +34,8 @@ import time
 import json
 import helpers
 
-
+DEFAULT_TABLE_HEADERS = ["ID", "PatientName", "PatientID", "PatientBirthDate", "PatientSex", 
+          "StudyDate", "StudyID", "StudyDescription", "InstitutionName", "StudyInstanceUID", "IsStable", "NumberOfDICOMS"]
 # ==========================================================
 class OrthancDBManager(object):
     '''
@@ -57,37 +58,34 @@ class OrthancDBManager(object):
     # -----------------------------------------------------
     # METHODS
     # -----------------------------------------------------
-    def getAllSubjects(self):
+    def getAllDB_Subjects(self):
         ''' return list of subjects'''
         return RestToolbox.DoGet('%s/patients'%(self.url))
         
-    def getAllStudies(self, subjectID=None):
+    def getAllDB_Studies(self):
         ''' retrun list of studies '''
-        if subjectID is None:
-            return RestToolbox.DoGet('%s/studies'%(self.url))
-        else:
-            return self.getSubjectInfosForID(subjectID)['Studies']
+        return RestToolbox.DoGet('%s/studies'%(self.url))
         
-    def getAllNames(self):
+    def getAllDB_Names(self):
         allNames = []
-        for iSubject in self.getAllSubjects():
+        for iSubject in self.getAllDB_Subjects():
             infos = RestToolbox.DoGet('%s/patients/%s' % (self.url, iSubject))
             allNames.append([infos['ID'],infos['MainDicomTags']['PatientName'].lower()])
         return allNames
 
-    def findName(self, searchName):
+    def findPatientName(self, searchName):
         ''' Return list of [studyID, Name] for names matching name'''
         matchingNames = []
-        for iSubject in self.getAllSubjects():
-            infos = self.getSubjectInfosForID(iSubject)
-            name = infos['MainDicomTags']['PatientName'].lower()
+        for iStudy in self.getAllDB_Studies():
+            infos = self.getStudyInfosForID(iStudy)
+            name = infos['PatientMainDicomTags']['PatientName'].lower()
             if searchName.lower() in name:
                 matchingNames.append([infos['ID'], name])
         return matchingNames
     
     def getStudiesWithinDates(self, sDate, eDate, LAST_UPDATED=False):
         studyIDsOut = []
-        for iStudyID in self.getAllStudies():
+        for iStudyID in self.getAllDB_Studies():
             study = self.getStudyInfosForID(iStudyID)
             if LAST_UPDATED:
                 qDate = study['LastUpdate'][:8]
@@ -102,7 +100,7 @@ class OrthancDBManager(object):
 
     def getSmallTagDictForEachStudy(self, studyIDList=None):
         studiesDict = {}
-        for iSubject in self.getAllSubjects():
+        for iSubject in self.getAllDB_Subjects():
             infos = self.getSubjectInfosForID(iSubject)
             for iStudyID in infos['Studies']:
                 if studyIDList is not None:
@@ -120,7 +118,12 @@ class OrthancDBManager(object):
         return RestToolbox.DoGet('%s/patients/%s' % (self.url, ID))
     
     def getStudyInfosForID(self, ID):
-        return RestToolbox.DoGet('%s/studies/%s' % (self.url, ID))
+        infoDict = RestToolbox.DoGet('%s/studies/%s' % (self.url, ID))
+        instanceIDs = []
+        for iSeries in infoDict['Series']:
+            instanceIDs += self.getSeriesInfosForID(iSeries)['Instances']
+        infoDict["NumberOfDICOMS"] = len(instanceIDs)
+        return infoDict
     
     def getSeriesInfosForID(self, ID):
         return RestToolbox.DoGet('%s/series/%s' % (self.url, ID))
@@ -273,14 +276,14 @@ class OrthancDBManager(object):
     def buildSummaryFile(self, studyID, outputDir):
         ff = '%s.txt'%(self.getOutputFolderNameForStudyID(studyID))
         fileOut = os.path.join(outputDir, ff)
-        strOut = self.getStudySummary(studyID, ff)
+        strOut = self.getStudySummary(studyID)
         with open(fileOut, 'w') as fid:
             fid.write(strOut)
         return fileOut
     
     def getStudies(self):
         allStudiesList = []
-        for iStudyID in self.getAllStudies():
+        for iStudyID in self.getAllDB_Studies():
             studyInfos = self.getStudyInfosForID(iStudyID)
             allStudiesList.append([iStudyID, 
                                     studyInfos['PatientMainDicomTags'].get('PatientID','Not Specified'),
@@ -297,16 +300,19 @@ class OrthancDBManager(object):
                                     len(self.getListOfInstanceIDForStudy(iStudyID))])
         return allStudiesList
     
-    def getStudySummaryLine(self, studyID, headerLabel=''):
+    def getStudySummaryLine(self, studyID, headerLabels=DEFAULT_TABLE_HEADERS):
         studyInfos = self.getStudyInfosForID(studyID)
-        strOut = 'StudyID: %s| %s|'%(studyInfos['ID'], headerLabel)
-        strOut += '%s|%s|%s|%s|%s|%s|%s|%d'%(studyInfos['MainDicomTags'].get('InstitutionName','Not Specified'),
-                            studyInfos['PatientMainDicomTags'].get('PatientName','Not Specified'),
-                            studyInfos['MainDicomTags'].get('StudyID','Not Specified'),
-                            studyInfos['MainDicomTags'].get('StudyDate','Not Specified'),
-                            studyInfos['MainDicomTags'].get('StudyDescription','Not Specified'),
-                            studyInfos['MainDicomTags'].get('StudyInstanceUID','Not Specified'),
-                            studyInfos['IsStable'],len(self.getListOfInstanceIDForStudy(studyID)))
+        resList = []
+        for i in headerLabels:
+            try: 
+                val = studyInfos['PatientMainDicomTags'][i]
+            except KeyError:
+                try:
+                    val = studyInfos['MainDicomTags'][i]
+                except KeyError:
+                    val = studyInfos.get(i,'Not Specified')
+            resList.append(str(val))
+        strOut = ",".join(resList)
         return strOut
 
     def seNum_sortKey(self, seriesID):
@@ -325,8 +331,8 @@ class OrthancDBManager(object):
             dataDict['Series'].append({'SeriesDescription': sd, 'SeriesNumber': sN, 'NumberImages': nFiles})
         return dataDict
 
-    def getStudySummary(self, studyID, headerLabel=''):
-        strOut = self.getStudySummaryLine(studyID, headerLabel)
+    def getStudySummary(self, studyID, headerLabels=DEFAULT_TABLE_HEADERS):
+        strOut = self.getStudySummaryLine(studyID, headerLabels)
         listOfSeriesIDs = sorted(self.getListOfSeriesIDForStudy(studyID), key=self.seNum_sortKey)
         nTot = 0
         strOut += '  %-50s | %s\n'%('SeriesDescription', 'nImages')
@@ -342,7 +348,7 @@ class OrthancDBManager(object):
     
     def getSubjectSummaryDict(self, SubjectIDsList=[]):
         summaryDict = {}
-        for iSubject in self.getAllSubjects():
+        for iSubject in self.getAllDB_Subjects():
             if len(SubjectIDsList) > 0:
                 if iSubject not in SubjectIDsList:
                     continue
@@ -358,7 +364,7 @@ class OrthancDBManager(object):
     
     def getStudySummaryStrAll(self):
         summaryStr = ''
-        for iStudyID in self.getAllStudies():
+        for iStudyID in self.getAllDB_Studies():
             summaryStr += self.getStudySummary(iStudyID)
         return summaryStr
     
@@ -399,15 +405,15 @@ class OrthancDBManager(object):
     def getStudyIDForExamIDs(self, examNumberList):
         examNumberList = [str(i) for i in examNumberList]
         exStudyIDList = []
-        for iStudyID in self.getAllStudies():
+        for iStudyID in self.getAllDB_Studies():
             dbExamID = self.getTag(self.getStudyInfosForID(iStudyID), 'StudyID')
             if dbExamID in examNumberList:
                 exStudyIDList.append([dbExamID,iStudyID])
         return exStudyIDList
     
-    def getAllStudyIDExamIDList(self):
+    def getAllExamIDs_StudyIDs_list(self):
         exStudyIDList = []
-        for iStudyID in self.getAllStudies():
+        for iStudyID in self.getAllDB_Studies():
             dbExamID = self.getTag(self.getStudyInfosForID(iStudyID), 'StudyID')
             exStudyIDList.append([dbExamID,iStudyID])
         return exStudyIDList
@@ -493,10 +499,39 @@ class NotStableError(Exception):
         return 'Error ID %s (type: %s) is not stable'%(self.infos['ID'], self.infos['Type'])
     
 
-# ============================================================================
 # =============================================================================
+# =============================================================================
+def getDBStudyIDs_fromArgs(args, ODB):
+    db_studyIDs = []
+    if args.ALL_STUDIES:
+        db_studyIDs = ODB.getAllDB_Studies()
+
+    else:
+        db_studyIDs += args.StudyIDs
+        if args.patientName is not None:
+            esListAt = ODB.findPatientName(args.patientName)
+            for i in esListAt:
+                if i[0] not in db_studyIDs:
+                    db_studyIDs.append(i[0])
+        if len(args.examNumberToSearchList) > 0:
+            esListAt += ODB.getStudyIDForExamIDs(args.examNumberToSearchList)
+            for i in esListAt:
+                if i[0] not in db_studyIDs:
+                    db_studyIDs.append(i[0])
+        
+        if len(args.dates) == 2:
+            esListAt = ODB.getStudiesWithinDates(args.dates[0], args.dates[1])
+            for i in esListAt:
+                if i not in db_studyIDs:
+                    db_studyIDs.append(i)
+
+    return db_studyIDs
+    #
+
+
+
+
 def main(args):
-    esListA = []
     # --------------------------------------------------------------------------
     DB_URL = 'http://%s:%d/%s'%(args.URL, args.PORT, args.EXPOSED)
     ODB = OrthancDBManager(DB_URL)
@@ -504,50 +539,40 @@ def main(args):
 
     if args.TEST_LIVE:
         try: 
-            SS = ODB.getAllStudies()
+            SS = ODB.getAllDB_Studies()
             print('ORTHANC LIVE (%d studies)'%(len(SS)))
         except socket.error:
             print('ORTHANC NOT LIVE')
-    if args.name is not None:
-        print(ODB.findName(args.name))
-    if len(args.examNumberToSearchList) > 0:
-        esListA = ODB.getStudyIDForExamIDs(args.examNumberToSearchList)
-    elif len(args.StudyIDs) > 0:
-        esListA = [[0,i] for i in args.StudyIDs]
     #
-    if args.ALL_STUDIES:
-        esListA = ODB.getAllStudyIDExamIDList()
-        args.StudyIDs = [i[1] for i in esListA]
-    #
+    db_studyIDs = getDBStudyIDs_fromArgs(args, ODB)
+    print(f"Querying {len(db_studyIDs)} studies")
+    print(db_studyIDs)
     if args.TO_PRINT_SUMMARY:
-        for e,s in esListA:
-            print(ODB.getStudySummaryLine(s))
+        print(",".join(DEFAULT_TABLE_HEADERS))
+        for s in db_studyIDs:
+            print(ODB.getStudySummaryLine(s, DEFAULT_TABLE_HEADERS))
     if args.TO_PRINT_INFO_FULL:
-        for e,s in esListA:
-            print(ODB.getStudySummary(s, ' Exam %s'%(e)))
+        for s in db_studyIDs:
+            print(ODB.getStudySummary(s, DEFAULT_TABLE_HEADERS))
             print('')
     if args.TO_EXPORT:
         if args.outputDir is None:
             ap.exit(1, 'Need outputDir to export to.')
-        if len(esListA) == 0:
+        if len(db_studyIDs) == 0:
             ap.exit(1, 'Need Exam ID(s) to export.')
-        for e,s in esListA:
+        for s in db_studyIDs:
             ODB.exportStudyToDirectory(s, args.outputDir)
 
     if args.TO_PUSH is not None:
         if len(args.StudyIDs) == 0:
             ap.exit(1, 'Need Study ID(s) to push.')
-        for iStudy in args.StudyIDs:
+        for iStudy in db_studyIDs:
             ODB.exportStudyToRemote(iStudy, args.TO_PUSH)
 
-    if len(args.dates) == 2:
-        args.StudyIDs = ODB.getStudiesWithinDates(args.dates[0], args.dates[1])
-        print(' '.join(args.StudyIDs))
-        print('')
     if args.TO_DELETE:
-        if len(args.StudyIDs) == 0:
+        if len(db_studyIDs) == 0:
             ap.exit(1, 'Need Study ID(s) to delete.')
-        for ii in args.StudyIDs:
+        for ii in db_studyIDs:
             ODB.deleteStudy(ii)
     if args.loadDirectory:
         if not os.path.isdir(args.loadDirectory):
@@ -569,9 +594,9 @@ if __name__ == '__main__':
     groupSP.add_argument('-u',dest='URL',help='URL of database',type=str,default=helpers.ORTHANC_URL)
     groupSP.add_argument('-p',dest='PORT',help='PORT of database',type=int,default=helpers.ORTHANC_PORT)
     groupSP.add_argument('-exposed',dest='EXPOSED',help='Path exposed by nginx',type=str,default=helpers.ORTHANC_EXPOSED)
-    groupSP.add_argument('-n',dest='name',help='Name',type=str,default=None)
+    groupSP.add_argument('-n',dest='patientName',help='patient name to search for',type=str,default=None)
     groupSP.add_argument('-f',dest='examNumberToSearchList',help='exam IDs of interest (Scanner assigned)',nargs='*',type=str,default=[])
-    groupSP.add_argument('-i',dest='SubjectID',help='SubjectID - to list studies',type=str,default=None)
+    # groupSP.add_argument('-i',dest='SubjectID',help='SubjectID - to list studies',type=str,default=None)
     groupSP.add_argument('-s',dest='StudyIDs',help='Study IDs list',nargs='*',type=str,default=[])
     groupSP.add_argument('-D',dest='TO_DELETE',help='To delete subject',action='store_true')
     groupSP.add_argument('-I',dest='TO_PRINT_INFO_FULL',help='To print full info',action='store_true')
