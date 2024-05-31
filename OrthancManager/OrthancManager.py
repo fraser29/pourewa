@@ -563,7 +563,7 @@ def main(args):
     #
     db_studyIDs = getDBStudyIDs_fromArgs(args, ODB)
     print(f"Querying {len(db_studyIDs)} studies")
-    print(db_studyIDs)
+    print(" ")
     if args.TO_PRINT_SUMMARY:
         print(",".join(DEFAULT_TABLE_HEADERS))
         for s in db_studyIDs:
