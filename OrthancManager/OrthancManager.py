@@ -134,6 +134,9 @@ class OrthancDBManager(object):
     def getDataForStudy(self, ID):
         return RestToolbox.DoGet('%s/patients/%s/archive' % (self.url, ID))
     
+    def getTotalNumberOfDICOMS(self):
+        return len(RestToolbox.DoGet('%s/instances/' % (self.url)))
+
     def exportStudyToZip(self, studyID, outputDir):
         ''' Will export study to zip - with organised name '''
         infos = self.getStudyInfosForID(studyID)
@@ -190,6 +193,7 @@ class OrthancDBManager(object):
             return self.getTag(infos, tag)
         elif level == 'Study':
             infos = self.getStudyInfosForID(studyID)
+            infos["MainDicomTags"].update(infos["PatientMainDicomTags"]) # flatten PatientMainDicomTags into main dict to help query
             return self.getTag(infos, tag)
         elif level == 'Series':
             return "|".join([self.getTag(self.getSeriesInfosForID(iSeries), tag) for iSeries in self.getAllSeriesForStudyID(studyID)])
@@ -511,22 +515,27 @@ def getDBStudyIDs_fromArgs(args, ODB):
         if args.patientName is not None:
             esListAt = ODB.findPatientName(args.patientName)
             for i in esListAt:
-                if i[0] not in db_studyIDs:
-                    db_studyIDs.append(i[0])
+                db_studyIDs.append(i[0])
         if len(args.examNumberToSearchList) > 0:
             esListAt += ODB.getStudyIDForExamIDs(args.examNumberToSearchList)
             for i in esListAt:
-                if i[0] not in db_studyIDs:
-                    db_studyIDs.append(i[0])
+                db_studyIDs.append(i[0])
         
         if len(args.dates) == 2:
             esListAt = ODB.getStudiesWithinDates(args.dates[0], args.dates[1])
             for i in esListAt:
-                if i not in db_studyIDs:
+                db_studyIDs.append(i)
+        
+        if len(args.tag) == 2:
+            for i in ODB.getAllDB_Studies():
+                val = ODB.getTagFromLevel(i, args.tag[0], 'Study')
+                if args.tag[1].lower() in val.lower():
                     db_studyIDs.append(i)
 
-    return db_studyIDs
+    db_studyIDs = list(set(db_studyIDs))
+    db_studyIDs = [i for i in db_studyIDs if ODB.isStudyStable(i)]
     #
+    return db_studyIDs
 
 
 
@@ -541,6 +550,14 @@ def main(args):
         try: 
             SS = ODB.getAllDB_Studies()
             print('ORTHANC LIVE (%d studies)'%(len(SS)))
+        except socket.error:
+            print('ORTHANC NOT LIVE')
+    #
+    if args.INFO:
+        try: 
+            SS = ODB.getAllDB_Studies()
+            nDICOMS = ODB.getTotalNumberOfDICOMS()
+            print(f'ORTHANC LIVE: {len(SS)} studies, {nDICOMS} total images')
         except socket.error:
             print('ORTHANC NOT LIVE')
     #
@@ -560,18 +577,21 @@ def main(args):
             ap.exit(1, 'Need outputDir to export to.')
         if len(db_studyIDs) == 0:
             ap.exit(1, 'Need Exam ID(s) to export.')
+        print(f"EXPORTING {len(db_studyIDs)} studies to {args.outputDir}")
         for s in db_studyIDs:
             ODB.exportStudyToDirectory(s, args.outputDir)
 
     if args.TO_PUSH is not None:
         if len(args.StudyIDs) == 0:
             ap.exit(1, 'Need Study ID(s) to push.')
+        print(f"PUSHING {len(db_studyIDs)} studies to {args.TO_PUSH}")
         for iStudy in db_studyIDs:
             ODB.exportStudyToRemote(iStudy, args.TO_PUSH)
 
     if args.TO_DELETE:
         if len(db_studyIDs) == 0:
             ap.exit(1, 'Need Study ID(s) to delete.')
+        print(f"DELETING {len(db_studyIDs)} studies")
         for ii in db_studyIDs:
             ODB.deleteStudy(ii)
     if args.loadDirectory:
@@ -603,6 +623,7 @@ if __name__ == '__main__':
     groupSP.add_argument('-S',dest='TO_PRINT_SUMMARY',help='To print summary',action='store_true')
     groupSP.add_argument('-A',dest='ALL_STUDIES',help='To use all STUDIES',action='store_true')
     groupSP.add_argument('-TL',dest='TEST_LIVE',help='test that live',action='store_true')
+    groupSP.add_argument('-INFO',dest='INFO',help='return DB info',action='store_true')
     groupSP.add_argument('-E',dest='TO_EXPORT',help='To export subject to directory',action='store_true')
     groupSP.add_argument('-PUSH',dest='TO_PUSH',help='To push to remote (named modality in e.g. Orthanc.json)',type=str, default=None)
     groupSP.add_argument('-l',dest='loadDirectory',help='To load a directory recursively',type=str, default=None)
@@ -610,7 +631,8 @@ if __name__ == '__main__':
     groupSP.add_argument('-TEST',dest='TEST',help='test',action='store_true')
     groupSP.add_argument('-Z',dest='TO_ZIP',help='To export subject to zip',action='store_true')
     groupSP.add_argument('-o',dest='outputDir',help='Output directory for export', type=str, default=None)
-    groupSP.add_argument('-d',dest='dates',help='dates to search within - alone will print studyIDs YYYMMDD', nargs='+', type=str, default=[])
+    groupSP.add_argument('-d',dest='dates',help='Dates to search within - -can be combined with other actions, alone will print studyIDs YYYMMDD', nargs='+', type=str, default=[])
+    groupSP.add_argument('-tag',dest='tag',help='Find studies based on tag-value pair', nargs=2, type=str, default=[])
     ##
     
     argsA = ap.parse_args()
