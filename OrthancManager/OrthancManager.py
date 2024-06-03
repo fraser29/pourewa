@@ -533,7 +533,6 @@ def getDBStudyIDs_fromArgs(args, ODB):
                     db_studyIDs.append(i)
 
     db_studyIDs = list(set(db_studyIDs))
-    db_studyIDs = [i for i in db_studyIDs if ODB.isStudyStable(i)]
     #
     return db_studyIDs
 
@@ -566,34 +565,45 @@ def main(args):
     print(" ")
     if args.TO_PRINT_SUMMARY:
         print(",".join(DEFAULT_TABLE_HEADERS))
-        for s in db_studyIDs:
-            print(ODB.getStudySummaryLine(s, DEFAULT_TABLE_HEADERS))
+        for iStudy in db_studyIDs:
+            print(ODB.getStudySummaryLine(iStudy, DEFAULT_TABLE_HEADERS))
     if args.TO_PRINT_INFO_FULL:
-        for s in db_studyIDs:
-            print(ODB.getStudySummary(s, DEFAULT_TABLE_HEADERS))
+        for iStudy in db_studyIDs:
+            print(ODB.getStudySummary(iStudy, DEFAULT_TABLE_HEADERS))
             print('')
+
     if args.TO_EXPORT:
         if args.outputDir is None:
             ap.exit(1, 'Need outputDir to export to.')
         if len(db_studyIDs) == 0:
             ap.exit(1, 'Need Exam ID(s) to export.')
         print(f"EXPORTING {len(db_studyIDs)} studies to {args.outputDir}")
-        for s in db_studyIDs:
-            ODB.exportStudyToDirectory(s, args.outputDir)
+        for iStudy in db_studyIDs:
+            if ODB.isStudyStable(iStudy):
+                ODB.exportStudyToDirectory(iStudy, args.outputDir)
+            else:
+                print(f"WARNING: {iStudy} is not stable. Skipping.")
 
     if args.TO_PUSH is not None:
         if len(args.StudyIDs) == 0:
             ap.exit(1, 'Need Study ID(s) to push.')
         print(f"PUSHING {len(db_studyIDs)} studies to {args.TO_PUSH}")
         for iStudy in db_studyIDs:
-            ODB.exportStudyToRemote(iStudy, args.TO_PUSH)
+            if ODB.isStudyStable(iStudy):
+                ODB.exportStudyToRemote(iStudy, args.TO_PUSH)
+            else:
+                print(f"WARNING: {iStudy} is not stable. Skipping.")
 
     if args.TO_DELETE:
         if len(db_studyIDs) == 0:
             ap.exit(1, 'Need Study ID(s) to delete.')
         print(f"DELETING {len(db_studyIDs)} studies")
-        for ii in db_studyIDs:
-            ODB.deleteStudy(ii)
+        for iStudy in db_studyIDs:
+            if ODB.isStudyStable(iStudy):
+                ODB.deleteStudy(iStudy)
+            else:
+                print(f"WARNING: {iStudy} is not stable. Skipping.")
+            
     if args.loadDirectory:
         if not os.path.isdir(args.loadDirectory):
             ap.exit(1, 'Directory does not exist')
