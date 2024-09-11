@@ -511,9 +511,10 @@ def getDBStudyIDs_fromArgs(args, ODB):
         db_studyIDs = ODB.getAllDB_Studies()
 
     else:
+        esListAt = []
         db_studyIDs += args.StudyIDs
         if args.patientName is not None:
-            esListAt = ODB.findPatientName(args.patientName)
+            esListAt += ODB.findPatientName(args.patientName)
             for i in esListAt:
                 db_studyIDs.append(i[0])
         if len(args.examNumberToSearchList) > 0:
