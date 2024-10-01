@@ -28,11 +28,16 @@ from __future__ import print_function
 import os
 import socket
 import argparse
-import OrthancRestToolbox as RestToolbox
 from datetime import datetime
 import time
 import json
-import helpers
+try: 
+    from OrthancManager import OrthancRestToolbox as RestToolbox
+    from OrthancManager import helpers
+except ImportError: # Local
+    import OrthancRestToolbox as RestToolbox
+    import helpers
+
 
 DEFAULT_TABLE_HEADERS = ["ID", "PatientName", "PatientID", "PatientBirthDate", "PatientSex", 
           "StudyDate", "StudyID", "StudyDescription", "InstitutionName", "StudyInstanceUID", "IsStable", "NumberOfDICOMS"]
