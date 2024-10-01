@@ -34,7 +34,7 @@ import json
 try: 
     from OrthancManager import OrthancRestToolbox as RestToolbox
     from OrthancManager import helpers
-except ImportError: # Local
+except ModuleNotFoundError: # Local
     import OrthancRestToolbox as RestToolbox
     import helpers
 
