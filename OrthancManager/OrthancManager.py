@@ -158,13 +158,13 @@ class OrthancDBManager(object):
         studyInfos = self.getStudyInfosForID(studyID)
         if not studyInfos['IsStable']:
             raise NotStableError(studyInfos)
-        RestToolbox.DoDelete('%s/studies/%s'%(self.url, studyID))
+        return RestToolbox.DoDelete('%s/studies/%s'%(self.url, studyID))
         
     def deleteSeries(self, seriesID):
         seriesInfos = self.getSeriesInfosForID(seriesID)
         if not seriesInfos['IsStable']:
             raise NotStableError(seriesInfos)
-        RestToolbox.DoDelete('%s/series/%s'%(self.url, seriesID))
+        return RestToolbox.DoDelete('%s/series/%s'%(self.url, seriesID))
 
     def anonymizeStudy(self, studyID, jsonObj=None):
         if jsonObj is None:
@@ -234,16 +234,19 @@ class OrthancDBManager(object):
 
     def exportInstancesToRemote(self, instanceIDList, remoteName):
         for iInstance in instanceIDList:
-            RestToolbox.DoPost('%s/modalities/%s/store'%(self.url, remoteName), iInstance)
+            res = RestToolbox.DoPost('%s/modalities/%s/store'%(self.url, remoteName), iInstance)
+        return res
 
     def exportSeriesToRemote(self, seriesID, remoteName):
         instanceIDs = self.getSeriesInfosForID(seriesID)['Instances']
-        self.exportInstancesToRemote(instanceIDs, remoteName)
+        return self.exportInstancesToRemote(instanceIDs, remoteName)
 
     def exportStudyToRemote(self, studyID, remoteName):
         seriesID = self.getListOfSeriesIDForStudy(studyID)
         for iSeries in seriesID:
-            self.exportSeriesToRemote(iSeries, remoteName)
+            res = self.exportSeriesToRemote(iSeries, remoteName)
+        return res
+
 
     def exportSeriesToDirectoryStructure(self, seriesID, topDir, IM_NAME=False):  
         series = RestToolbox.DoGet('%s/series/%s' % (self.url, seriesID))  
@@ -491,6 +494,7 @@ class OrthancDBManager(object):
                                                                                         count,
                                                                                         alreadyPresent,
                                                                                         skipped))
+        return res
     
 # ============================================================================
 # ============================================================================
