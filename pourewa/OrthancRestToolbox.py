@@ -19,13 +19,10 @@
 import httplib2
 import json
 import sys
+from urllib.parse import urlencode
+from pourewa import helpers
 
-if (sys.version_info >= (3, 0)):
-    from urllib.parse import urlencode  # @UnresolvedImport @UnusedImport
-else:
-    from urllib import urlencode  # @Reimport
 
-import helpers
 
 _credentials = (helpers.ORTHANC_USERNAME,helpers.ORTHANC_PASSWORD)
 

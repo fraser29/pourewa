@@ -26,50 +26,49 @@ Orthanc DB Management
 """
 from __future__ import print_function
 import os
+import sys
 import socket
 import argparse
 from datetime import datetime
 import time
 import json
-try: 
-    from OrthancManager.OrthancManager import OrthancRestToolbox as RestToolbox
-    from OrthancManager.OrthancManager import helpers
-except ModuleNotFoundError: # Local
-    import OrthancRestToolbox as RestToolbox
-    import helpers
+from pourewa import OrthancRestToolbox as RestToolbox
+from pourewa import helpers
 
 
 DEFAULT_TABLE_HEADERS = ["ID", "PatientName", "PatientID", "PatientBirthDate", "PatientSex", 
           "StudyDate", "StudyID", "StudyDescription", "InstitutionName", "StudyInstanceUID", "IsStable", "NumberOfDICOMS"]
 # ==========================================================
 class OrthancDBManager(object):
-    '''
-    Class to manage a Orthanc DB
-    '''
     @classmethod
     def OrthancTimeToDateTime(cls, orthancTime):
         return datetime.strptime(orthancTime, '%Y%m%dT%H%M%S')
     
     
     def __init__(self, URL):
-        '''
-        Constructor
-        '''
         self.url = URL
         self.VERBOSE = True
     
     def __str__(self):
-        return 'Orthanc DB Manager at %s'%(self.url)
+        return f'Orthanc DB Manager at {self.url}'
     # -----------------------------------------------------
     # METHODS
     # -----------------------------------------------------
     def getAllDB_Subjects(self):
-        ''' return list of subjects'''
-        return RestToolbox.DoGet('%s/patients'%(self.url))
+        """ return list of subjects"""
+        try:
+            return RestToolbox.DoGet('%s/patients'%(self.url))
+        except Exception as e:
+            print(f'ERROR from RestToolbox.DoGet: {e}')
+            sys.exit(1)
         
     def getAllDB_Studies(self):
-        ''' retrun list of studies '''
-        return RestToolbox.DoGet('%s/studies'%(self.url))
+        """ retrun list of studies """
+        try:
+            return RestToolbox.DoGet('%s/studies'%(self.url))
+        except Exception as e:
+            print(f'ERROR from RestToolbox.DoGet: {e}')
+            sys.exit(1)
         
     def getAllDB_Names(self):
         allNames = []
@@ -79,7 +78,7 @@ class OrthancDBManager(object):
         return allNames
 
     def findPatientName(self, searchName):
-        ''' Return list of [studyID, Name] for names matching name'''
+        """ Return list of [studyID, Name] for names matching name"""
         matchingNames = []
         for iStudy in self.getAllDB_Studies():
             infos = self.getStudyInfosForID(iStudy)
@@ -143,7 +142,7 @@ class OrthancDBManager(object):
         return len(RestToolbox.DoGet('%s/instances/' % (self.url)))
 
     def exportStudyToZip(self, studyID, outputDir):
-        ''' Will export study to zip - with organised name '''
+        """ Will export study to zip - with organised name """
         infos = self.getStudyInfosForID(studyID)
         if not infos['IsStable']:
             raise NotStableError(infos)
@@ -490,10 +489,7 @@ class OrthancDBManager(object):
                 else:
                     skipped += 1
         if self.VERBOSE:
-            print('Upload from %s: %d images added, %d already present, %d non-dicoms'%(dirName,
-                                                                                        count,
-                                                                                        alreadyPresent,
-                                                                                        skipped))
+            print(f'Upload from {dirName}: {count} images added, {alreadyPresent} already present, {skipped} non-dicoms')
         return res
     
 # ============================================================================
@@ -503,8 +499,8 @@ class OrthancDBManager(object):
 # ============================================================================
 # Not Stable Error
 class NotStableError(Exception):
-    ''' NotStableError
-            Simple exception for when a study is not stable - still transferring '''
+    """ NotStableError
+            Simple exception for when a study is not stable - still transferring """
     def __init__(self, infos):
         self.infos = infos
         
@@ -549,16 +545,16 @@ def getDBStudyIDs_fromArgs(args, ODB):
 
 
 
-def main(args):
+def run(args):
     # --------------------------------------------------------------------------
-    DB_URL = 'http://%s:%d/%s'%(args.URL, args.PORT, args.EXPOSED)
+    DB_URL = f'http://{args.URL}:{args.PORT}/{args.EXPOSED}'
     ODB = OrthancDBManager(DB_URL)
     print(ODB)
 
     if args.TEST_LIVE:
         try: 
             SS = ODB.getAllDB_Studies()
-            print('ORTHANC LIVE (%d studies)'%(len(SS)))
+            print(f'ORTHANC LIVE ({len(SS)} studies)')
         except socket.error:
             print('ORTHANC NOT LIVE')
     #
@@ -584,9 +580,9 @@ def main(args):
 
     if args.TO_EXPORT:
         if args.outputDir is None:
-            ap.exit(1, 'Need outputDir to export to.')
+            sys.exit('ERROR: Need outputDir to export to.')
         if len(db_studyIDs) == 0:
-            ap.exit(1, 'Need Exam ID(s) to export.')
+            sys.exit('ERROR: Need Exam ID(s) to export.')
         print(f"EXPORTING {len(db_studyIDs)} studies to {args.outputDir}")
         for iStudy in db_studyIDs:
             if ODB.isStudyStable(iStudy):
@@ -596,7 +592,7 @@ def main(args):
 
     if args.TO_PUSH is not None:
         if len(args.StudyIDs) == 0:
-            ap.exit(1, 'Need Study ID(s) to push.')
+            sys.exit('ERROR: Need Study ID(s) to push.')
         print(f"PUSHING {len(db_studyIDs)} studies to {args.TO_PUSH}")
         for iStudy in db_studyIDs:
             if ODB.isStudyStable(iStudy):
@@ -606,7 +602,7 @@ def main(args):
 
     if args.TO_DELETE:
         if len(db_studyIDs) == 0:
-            ap.exit(1, 'Need Study ID(s) to delete.')
+            sys.exit('ERROR: Need Study ID(s) to delete.')
         print(f"DELETING {len(db_studyIDs)} studies")
         for iStudy in db_studyIDs:
             if ODB.isStudyStable(iStudy):
@@ -616,14 +612,16 @@ def main(args):
             
     if args.loadDirectory:
         if not os.path.isdir(args.loadDirectory):
-            ap.exit(1, 'Directory does not exist')
+            sys.exit('ERROR: Directory does not exist')
         ODB.uploadDirectory(args.loadDirectory, args.DEBUG)
 
+    if args.loadPDF:
+        if not os.path.isfile(args.loadPDF):
+            sys.exit('ERROR: PDF file does not exist')
+        ODB.loadPDF(args.loadPDF)
 
 # =============================================================================
-# S T A R T
-#    
-if __name__ == '__main__':
+def main():
 
     # --------------------------------------------------------------------------
     #  ARGUMENT PARSING
@@ -647,6 +645,7 @@ if __name__ == '__main__':
     groupSP.add_argument('-E',dest='TO_EXPORT',help='To export subject to directory',action='store_true')
     groupSP.add_argument('-PUSH',dest='TO_PUSH',help='To push to remote (named modality in e.g. Orthanc.json)',type=str, default=None)
     groupSP.add_argument('-l',dest='loadDirectory',help='To load a directory recursively',type=str, default=None)
+    groupSP.add_argument('-pdf',dest='loadPDF',help='To load a PDF file and convert to DICOM (will add to study specified by -s or a query)',type=str, default=None)
     groupSP.add_argument('-DEBUG',dest='DEBUG',help='debug (see *.conf file)',action='store_true', default=helpers.DEBUG)
     groupSP.add_argument('-TEST',dest='TEST',help='test',action='store_true')
     groupSP.add_argument('-Z',dest='TO_ZIP',help='To export subject to zip',action='store_true')
@@ -656,6 +655,16 @@ if __name__ == '__main__':
     ##
     
     argsA = ap.parse_args()
-    main(argsA)
+    run(argsA)
     
+
+
+
+
+# =============================================================================
+# =============================================================================
+# S T A R T
+#    
+if __name__ == '__main__':
+    main()
     

@@ -3,7 +3,7 @@ import os
 import datetime
 
 
-NAME = 'OrthancManager'
+NAME = 'POUREWA'
 ## ====== CONFIG STUFF ====================================================================================
 thisConfFileName = f'{NAME}.conf'
 rootDir = os.path.abspath(os.path.dirname(__file__))
