@@ -34,6 +34,7 @@ import time
 import json
 from pourewa import OrthancRestToolbox as RestToolbox
 from pourewa import helpers
+from pourewa import pdf2dicom
 
 
 DEFAULT_TABLE_HEADERS = ["ID", "PatientName", "PatientID", "PatientBirthDate", "PatientSex", 
@@ -224,7 +225,7 @@ class OrthancDBManager(object):
     
     def exportInstanceToFileName(self, instanceID, fileName):
         try:
-            dcm = RestToolbox.DoGet('%s/instances/%s/file'%(self.url, instanceID))
+            dcm = RestToolbox.DoGet(f'{self.url}/instances/{instanceID}/file')
         except Exception:
             return None
         with open(fileName, 'wb') as g:
@@ -233,7 +234,7 @@ class OrthancDBManager(object):
 
     def exportInstancesToRemote(self, instanceIDList, remoteName):
         for iInstance in instanceIDList:
-            res = RestToolbox.DoPost('%s/modalities/%s/store'%(self.url, remoteName), iInstance)
+            res = RestToolbox.DoPost(f'{self.url}/modalities/{remoteName}/store', iInstance)
         return res
 
     def exportSeriesToRemote(self, seriesID, remoteName):
@@ -248,7 +249,7 @@ class OrthancDBManager(object):
 
 
     def exportSeriesToDirectoryStructure(self, seriesID, topDir, IM_NAME=False):  
-        series = RestToolbox.DoGet('%s/series/%s' % (self.url, seriesID))  
+        series = RestToolbox.DoGet(f'{self.url}/series/{seriesID}')  
         seN = self.getTag(series, 'SeriesNumber')
         seriesDirName = helpers.cleanString('SE%s_%s'%(seN, self.getTag(series, 'SeriesDescription')))
         instanceIDs = self.getSeriesInfosForID(seriesID)['Instances']
@@ -260,15 +261,15 @@ class OrthancDBManager(object):
             if nFilesAlready >= len(instanceIDs):
                 return None
         for iInstanceID in instanceIDs:
-            instance = RestToolbox.DoGet('%s/instances/%s' % (self.url, iInstanceID))
+            instance = RestToolbox.DoGet(f'{self.url}/instances/{iInstanceID}')
             if IM_NAME:
                 try:
-                    fileName = 'IM%05d_%05d.dcm'%(int(seN), int(self.getTag(instance, 'InstanceNumber')))
+                    fileName = f'IM{int(seN):05d}_{int(self.getTag(instance, "InstanceNumber")):05d}.dcm'
                 except ValueError:
                     IM_NAME = False
-                    fileName = '%s.dcm' % self.getTag(instance, 'SOPInstanceUID')
+                    fileName = f'{self.getTag(instance, "SOPInstanceUID")}.dcm'
             else:
-                fileName = '%s.dcm' % self.getTag(instance, 'SOPInstanceUID')
+                fileName = f'{self.getTag(instance, "SOPInstanceUID")}.dcm'
             fullFileName = os.path.join(parentDir, helpers.fixPath(fileName))
             self.exportInstanceToFileName(iInstanceID, fullFileName)
     
@@ -618,7 +619,32 @@ def run(args):
     if args.loadPDF:
         if not os.path.isfile(args.loadPDF):
             sys.exit('ERROR: PDF file does not exist')
-        ODB.loadPDF(args.loadPDF)
+        workingDir = os.path.dirname(args.loadPDF)
+        cleanUpFiles = []
+        if args.loadPDFDCM is None:
+            if len(db_studyIDs) == 0:
+                sys.exit('ERROR: Need a DICOM template to base pdf-2-dicom off (provide this or -s or query with -pdf)')
+            elif len(db_studyIDs) != 1:
+                sys.exit(f'ERROR: Found multiple ({len(db_studyIDs)}) potential studies from query - result must be 1 study')
+            else:
+                # Found one study - downlod a temp file of first instance in first series.
+                studyInfos = ODB.getStudyInfosForID(db_studyIDs[0])
+                instanceIDs = []
+                for iSeries in studyInfos['Series']:
+                    instanceIDs += ODB.getSeriesInfosForID(iSeries)['Instances']
+                    break
+                instanceID = instanceIDs[0]
+                templateDCM = os.path.join(workingDir, "template.dcm")
+                args.loadPDFDCM = ODB.exportInstanceToFileName(instanceID, templateDCM)
+                cleanUpFiles.append(templateDCM)
+        elif not os.path.isfile(args.loadPDFDCM):
+            sys.exit('ERROR: DICOM template does not exist - pass a path to a DICOM file via -pdfDCM or query a study')
+        dicomOutputTEMP = args.loadPDF.replace('.pdf', '.dcm')
+        pdf2dicom.pdf_to_dicom(args.loadPDF, args.loadPDFDCM, dicomOutputTEMP)
+        ODB._uploadFile(dicomOutputTEMP)
+        cleanUpFiles.append(dicomOutputTEMP)
+        for f in cleanUpFiles:
+            os.remove(f)
 
 # =============================================================================
 def main():
@@ -646,8 +672,8 @@ def main():
     groupSP.add_argument('-PUSH',dest='TO_PUSH',help='To push to remote (named modality in e.g. Orthanc.json)',type=str, default=None)
     groupSP.add_argument('-l',dest='loadDirectory',help='To load a directory recursively',type=str, default=None)
     groupSP.add_argument('-pdf',dest='loadPDF',help='To load a PDF file and convert to DICOM (will add to study specified by -s or a query)',type=str, default=None)
+    groupSP.add_argument('-pdfDCM',dest='loadPDFDCM',help='A DICOM template to base pdf-2-dicom off (provide this or -s or query with -pdf)',type=str, default=None)
     groupSP.add_argument('-DEBUG',dest='DEBUG',help='debug (see *.conf file)',action='store_true', default=helpers.DEBUG)
-    groupSP.add_argument('-TEST',dest='TEST',help='test',action='store_true')
     groupSP.add_argument('-Z',dest='TO_ZIP',help='To export subject to zip',action='store_true')
     groupSP.add_argument('-o',dest='outputDir',help='Output directory for export', type=str, default=None)
     groupSP.add_argument('-d',dest='dates',help='Dates to search within - -can be combined with other actions, alone will print studyIDs YYYMMDD', nargs='+', type=str, default=[])
