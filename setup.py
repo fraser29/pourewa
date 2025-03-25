@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pourewa",
-    version="0.1.0",
+    version="0.1.1",
     packages=find_packages(),
     install_requires=[
         "httplib2",
@@ -23,6 +23,7 @@ setup(
         "Topic :: Scientific/Engineering :: Medical Science Apps.",
     ],
     python_requires=">=3.6",
+    package_data={"pourewa": ["POUREWA.conf",]},
     entry_points={
         "console_scripts": [
             "pourewa=pourewa.pourewa:main",
