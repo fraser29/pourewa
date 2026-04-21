@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pourewa"
+version = "0.1.2"
+description = "A commandline tool for managing Orthanc DICOM servers"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.6"
+authors = [
+  { name = "Fraser Callaghan", email = "callaghan.fm@gmail.com" },
+]
+dependencies = [
+  "httplib2",
+  "pydicom",
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+  "Operating System :: OS Independent",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+
+[project.urls]
+Homepage = "https://github.com/fraser29/pourewa"
+
+[project.scripts]
+pourewa = "pourewa.pourewa:main"
+
+[tool.setuptools.packages.find]
+include = ["pourewa*"]
+
+[tool.setuptools.package-data]
+pourewa = ["POUREWA.conf"]

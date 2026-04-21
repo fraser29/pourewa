@@ -81,10 +81,11 @@ class OrthancDBManager(object):
     def findPatientName(self, searchName):
         """ Return list of [studyID, Name] for names matching name"""
         matchingNames = []
+        searchName_ = searchName.lower()
         for iStudy in self.getAllDB_Studies():
             infos = self.getStudyInfosForID(iStudy)
             name = infos['PatientMainDicomTags']['PatientName'].lower()
-            if searchName.lower() in name:
+            if searchName_ in name:
                 matchingNames.append([infos['ID'], name])
         return matchingNames
     
@@ -568,7 +569,7 @@ def run(args):
             print('ORTHANC NOT LIVE')
     #
     db_studyIDs = getDBStudyIDs_fromArgs(args, ODB)
-    print(f"Querying {len(db_studyIDs)} studies")
+    print(f"Filtered to {len(db_studyIDs)} studies")
     print(" ")
     if args.TO_PRINT_SUMMARY:
         print(",".join(DEFAULT_TABLE_HEADERS))
@@ -658,10 +659,10 @@ def main():
     groupSP.add_argument('-u',dest='URL',help='URL of database',type=str,default=helpers.ORTHANC_URL)
     groupSP.add_argument('-p',dest='PORT',help='PORT of database',type=int,default=helpers.ORTHANC_PORT)
     groupSP.add_argument('-exposed',dest='EXPOSED',help='Path exposed by nginx',type=str,default=helpers.ORTHANC_EXPOSED)
-    groupSP.add_argument('-n',dest='patientName',help='patient name to search for',type=str,default=None)
-    groupSP.add_argument('-f',dest='examNumberToSearchList',help='exam IDs of interest (Scanner assigned)',nargs='*',type=str,default=[])
+    groupSP.add_argument('-n',dest='patientName',help='Patient name to filter on',type=str,default=None)
+    groupSP.add_argument('-f',dest='examNumberToSearchList',help='Exam IDs of interest (Scanner assigned)',nargs='*',type=str,default=[])
     # groupSP.add_argument('-i',dest='SubjectID',help='SubjectID - to list studies',type=str,default=None)
-    groupSP.add_argument('-s',dest='StudyIDs',help='Study IDs list',nargs='*',type=str,default=[])
+    groupSP.add_argument('-s',dest='StudyIDs',help='Study IDs to filter on',nargs='*',type=str,default=[])
     groupSP.add_argument('-D',dest='TO_DELETE',help='To delete subject',action='store_true')
     groupSP.add_argument('-I',dest='TO_PRINT_INFO_FULL',help='To print full info',action='store_true')
     groupSP.add_argument('-S',dest='TO_PRINT_SUMMARY',help='To print summary',action='store_true')
