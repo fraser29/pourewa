@@ -1,0 +1,26 @@
+/* Keep content readable on wide screens */
+.content {
+  max-width: 960px;
+}
+
+/* Improve heading spacing rhythm */
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+}
+
+.toctree-wrapper p.caption {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+
+/* Slightly larger code text for readability */
+pre, code {
+  font-size: 0.95em;
+}
+
+/* Add subtle visual distinction to code blocks */
+div.highlight pre {
+  border-radius: 10px;
+}
