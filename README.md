@@ -4,6 +4,20 @@ Python based Orthanc Manager
 
 *pourewa* is the Māori word for tower.
 
+## Installation
+
+```bash
+pip install pourewa
+```
+
+## Usage
+
+```bash
+pourewa --help
+```
+
+See full documentation [here](https://fraser29.github.io/pourewa/).
+
 ## Info
 
 This is a simple python interface to Orthanc instances. 
@@ -19,9 +33,3 @@ POUREWA.conf is searched for at:
 - os.path.join(os.path.expanduser("~"), '.config',POUREWA.conf),
 - os.environ.get("POUREWA_CONF", '')
 
-
-## Usage
-
-```bash
-pourewa --help
-```
