@@ -1,4 +1,4 @@
-# POUREWA (formerly OrthancManager)
+# POUREWA
 
 Python based Orthanc Manager
 
